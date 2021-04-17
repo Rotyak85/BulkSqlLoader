@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30204.135
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BulkSqlLoader.Core", "BulkSqlLoader.Core\BulkSqlLoader.Core.csproj", "{BB358CEB-C9A7-4009-BE66-5E3B7CDB1B61}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BulkSqlLoader.XUnitTest", "BulkSqlLoader.XUnitTest\BulkSqlLoader.XUnitTest.csproj", "{39312112-AF30-42D2-825D-46169CC32385}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{BB358CEB-C9A7-4009-BE66-5E3B7CDB1B61}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BB358CEB-C9A7-4009-BE66-5E3B7CDB1B61}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BB358CEB-C9A7-4009-BE66-5E3B7CDB1B61}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BB358CEB-C9A7-4009-BE66-5E3B7CDB1B61}.Release|Any CPU.Build.0 = Release|Any CPU
+		{39312112-AF30-42D2-825D-46169CC32385}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{39312112-AF30-42D2-825D-46169CC32385}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{39312112-AF30-42D2-825D-46169CC32385}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{39312112-AF30-42D2-825D-46169CC32385}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {973C455A-36F9-4B88-891B-13AC9206F512}
+	EndGlobalSection
+EndGlobal
