@@ -4,9 +4,9 @@ using System.Threading.Tasks;
 using MySql.Data.MySqlClient;
 using Xunit;
 
-namespace BulkSqlLoader.XUnitTest
+namespace Loaders.Test
 {
-    public class MysqlTest : BulkSqlLoader
+    public class MysqlTest : BulkSqlLoaderTest
     {
         public MysqlTest()
         {
@@ -17,7 +17,7 @@ namespace BulkSqlLoader.XUnitTest
 
             IDbConnection conn = new MySqlConnection(connectionString);
 
-            _bulkSqlLoader = new Core.BulkSqlLoader(
+            _bulkSqlLoader = new BulkSqlLoader(
                 conn,
                 throwException: true, paramsBatchLimit:
                 paramsBatchLimit);
