@@ -25,7 +25,7 @@ Initialization:
 
             IDbConnection conn = new SqlConnection(connectionString);
 
-            _bulkSqlLoader = new Core.BulkSqlLoader(
+            _bulkSqlLoader = new BulkSqlLoader(
                 conn,
                 throwException: true, paramsBatchLimit:
                 paramsBatchLimit); //for example: sqlserver 2017 express has 2100

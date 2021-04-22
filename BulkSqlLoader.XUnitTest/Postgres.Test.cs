@@ -4,9 +4,9 @@ using System.Threading.Tasks;
 using Npgsql;
 using Xunit;
 
-namespace BulkSqlLoader.XUnitTest
+namespace Loaders.Test
 {
-    public class PostgreSqlTest : BulkSqlLoader
+    public class PostgreSqlTest : BulkSqlLoaderTest
     {
         public PostgreSqlTest()
         {
@@ -17,7 +17,7 @@ namespace BulkSqlLoader.XUnitTest
 
             IDbConnection conn = new NpgsqlConnection(connectionString);
 
-            _bulkSqlLoader = new Core.BulkSqlLoader(
+            _bulkSqlLoader = new BulkSqlLoader(
                 conn,
                 throwException: true, paramsBatchLimit:
                 paramsBatchLimit);

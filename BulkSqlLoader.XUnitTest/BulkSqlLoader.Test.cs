@@ -7,9 +7,9 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 
-namespace BulkSqlLoader.XUnitTest
+namespace Loaders.Test
 {
-    public abstract partial class BulkSqlLoader
+    public abstract partial class BulkSqlLoaderTest
     {
         protected string _engineName;
 
@@ -17,9 +17,9 @@ namespace BulkSqlLoader.XUnitTest
         protected readonly IConfigurationSection _queries;
         protected readonly IConfigurationSection _envirnoment;
 
-        protected Core.BulkSqlLoader _bulkSqlLoader;
+        protected BulkSqlLoader _bulkSqlLoader;
 
-        protected BulkSqlLoader()
+        protected BulkSqlLoaderTest()
         {
             IConfiguration builder = new ConfigurationBuilder()
                 .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
@@ -200,7 +200,7 @@ namespace BulkSqlLoader.XUnitTest
         }
     }
 
-    public abstract partial class BulkSqlLoader
+    public abstract partial class BulkSqlLoaderTest
     {
         protected async Task<long> CountAsync()
         {

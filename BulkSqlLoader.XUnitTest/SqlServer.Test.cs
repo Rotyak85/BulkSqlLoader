@@ -4,9 +4,9 @@ using System.Data.SqlClient;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace BulkSqlLoader.XUnitTest
+namespace Loaders.Test
 {
-    public class SqlServerTest : BulkSqlLoader
+    public class SqlServerTest : BulkSqlLoaderTest
     {
         public SqlServerTest()
         {
@@ -17,7 +17,7 @@ namespace BulkSqlLoader.XUnitTest
 
             IDbConnection conn = new SqlConnection(connectionString);
 
-            _bulkSqlLoader = new Core.BulkSqlLoader(
+            _bulkSqlLoader = new BulkSqlLoader(
                 conn,
                 throwException: true, paramsBatchLimit:
                 paramsBatchLimit);
