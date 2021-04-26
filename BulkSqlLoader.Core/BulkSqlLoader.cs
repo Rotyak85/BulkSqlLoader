@@ -4,19 +4,20 @@ using System.Data;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Loaders.Utilities;
 using Microsoft.Extensions.Logging;
 
 namespace Loaders
 {
-    public partial class BulkSqlLoader
+    public class BulkSqlLoader
     {
         /// <summary>
-        /// Connection passed in constructor
+        /// Connection passed in constructor.
         /// </summary>
         private IDbConnection _connection;
 
         /// <summary>
-        /// ILogger instance for logging
+        /// ILogger instance for logging.
         /// </summary>
         private readonly ILogger _logger;
 
@@ -34,16 +35,16 @@ namespace Loaders
         public int ParamsBatchLimit { get; set; }
 
         /// <summary>
-        /// If true, it raises an exception and aborts the transaction
+        /// If true, it raises an exception and aborts the transaction.
         /// </summary>
         public bool ThrowException { get; set; }
 
         /// <summary>
-        /// Constructor of instance
+        /// Constructor of instance.
         /// </summary>
-        /// <param name="connection">Connection istance</param>
-        /// <param name="logger">Set log istance (Nlog, Serilog.. etc)</param>
-        /// <param name="throwException">If true raises exception and stops the transactions</param>
+        /// <param name="connection">Connection istance.</param>
+        /// <param name="logger">Set log istance (Nlog, Serilog.. etc).</param>
+        /// <param name="throwException">If true raises exception and stops the transactions.</param>
         public BulkSqlLoader(IDbConnection connection, ILogger logger = null, bool throwException = false, int paramsBatchLimit = 2100)
         {
             _connection = connection;
@@ -54,10 +55,10 @@ namespace Loaders
         }
 
         /// <summary>
-        /// Starts the connection
+        /// Starts the connection.
         /// </summary>
-        /// <param name="retry">Number of attempts</param>
-        /// <returns>The open connection</returns>
+        /// <param name="retry">Number of attempts.</param>
+        /// <returns>The open connection.</returns>
         private IDbConnection Connect(int retry = 1)
         {
             _connection?.Close();
@@ -90,13 +91,13 @@ namespace Loaders
         }
 
         /// <summary>
-        /// Run generic query
+        /// Run generic query.
         /// </summary>
-        /// <param name="query">Query to execute</param>
-        /// <returns>Results list</returns>
+        /// <param name="query">Query to execute.</param>
+        /// <returns>Results list.</returns>
         public IEnumerable<object[]> ExecuteQuery(string query)
         {
-            List<object[]> result = new();
+            List<object[]> results = new();
 
             _connection = Connect();
 
@@ -113,14 +114,10 @@ namespace Loaders
 
                     for (int i = 0; i < reader.FieldCount; ++i)
                     {
-                        object value = reader[i];
-
-                        object castedValue = Convert.ChangeType(value, value.GetType());
-
-                        row.Add(castedValue);
+                        row.Add(reader[i]);
                     }
 
-                    result.Add(row.ToArray());
+                    results.Add(row.ToArray());
                 }
             }
             catch (Exception ex)
@@ -138,15 +135,15 @@ namespace Loaders
                 _connection?.Close();
             }
 
-            return result;
+            return results;
         }
 
         /// <summary>
-        /// Performs a single parameterized non query
+        /// Performs a single parameterized non query.
         /// </summary>
-        /// <param name="nonQuery">Non query to execute, example: "INSERT INTO TABLE_NAME (ID, DESC) VALUES (@p0, @p1)"</param>
-        /// <param name="parameters">Parameters to replace, example: [ 1, "hello" ]</param>
-        /// <param name="isolationLevel">Set the transaction lock</param>
+        /// <param name="nonQuery">Non query to execute, example: "INSERT INTO TABLE_NAME (ID, DESC) VALUES (@p0, @p1)".</param>
+        /// <param name="parameters">Parameters to replace, example: [ 1, "hello" ].</param>
+        /// <param name="isolationLevel">Set the transaction lock.</param>
         /// <returns>Number of affected rows</returns>
         public int ExecuteNonQuery(string nonQuery, Object[] parameters = null, IsolationLevel isolationLevel = IsolationLevel.Serializable)
         {
@@ -220,11 +217,11 @@ namespace Loaders
         }
 
         /// <summary>
-        /// Create a command with multiple non-queries and their parameters
+        /// Create a command with multiple non-queries and their parameters.
         /// </summary>
-        /// <param name="nonQueries">Non queries to execute, example: [ "INSERT INTO TABLE_NAME (ID, DESC) VALUES (@p0, @p1)", "INSERT INTO TABLE_NAME (ID, DESC) VALUES (@p2, @p3)" </param>
-        /// <param name="parameters">Parameters to replace, example: [ 1, "HELLO", 2, "WORLD" ]</param>
-        /// <param name="isolationLevel">set the transaction lock</param>
+        /// <param name="nonQueries">Non queries to execute, example: [ "INSERT INTO TABLE_NAME (ID, DESC) VALUES (@p0, @p1)", "INSERT INTO TABLE_NAME (ID, DESC) VALUES (@p2, @p3)".</param>
+        /// <param name="parameters">Parameters to replace, example: [ 1, "HELLO", 2, "WORLD" ].</param>
+        /// <param name="isolationLevel">set the transaction lock.</param>
         public void ExecuteNonQueries(string[] nonQueries, Object[] parameters = null, IsolationLevel isolationLevel = IsolationLevel.Serializable)
         {
             _connection = Connect();
@@ -332,15 +329,113 @@ namespace Loaders
                 _connection?.Close();
             }
         }
-    }
 
-    public partial class BulkSqlLoader
-    {
         /// <summary>
-        /// Starts the connection, async version
+        /// Gets the name of the columns of a specific table.
         /// </summary>
-        /// <param name="retry">Number of attempts</param>
-        /// <returns>The open connection</returns>
+        /// <param name="tableName">The name of the table.</param>
+        /// <returns>List of names.</returns>
+        public IEnumerable<string> GetColumnsName(string tableName)
+        {
+            List<string> results = new();
+
+            var query = $"SELECT * FROM {tableName}";
+
+            _connection = Connect();
+
+            IDbCommand command = null;
+
+            try
+            {
+                command = _connection.CreateCommand();
+                command.CommandText = query;
+
+                using var reader = command.ExecuteReader();
+
+                for (int i = 0; i < reader.FieldCount; ++i)
+                {
+                    results.Add(reader.GetName(i));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex.Message);
+                _logger?.LogError(ex.StackTrace);
+
+                if (ThrowException)
+                    throw;
+            }
+            finally
+            {
+                command?.Dispose();
+
+                _connection?.Close();
+            }
+
+            return results;
+        }
+
+        /// <summary>
+        /// Run Generic query, map the results in a specific entities collection.
+        /// </summary>
+        /// <typeparam name="T">Class that map columns, the name of the columns is case-sensitive.</typeparam>
+        /// <param name="query">Query to execute.</param>
+        /// <returns>Results list of T objects.</returns>
+        public IEnumerable<T> ExecuteQuery<T>(string query) where T : class, new()
+        {
+            List<T> results = new();
+
+            _connection = Connect();
+
+            IDbCommand command = null;
+
+            TypeAnalyzer<T> typeAnalyzer = new();
+            try
+            {
+                command = _connection.CreateCommand();
+                command.CommandText = query;
+
+                using var reader = command.ExecuteReader();
+
+                T obj = new();
+                while (reader.Read())
+                {
+                    for (int i = 0; i < reader.FieldCount; ++i)
+                    {
+                        var key = reader.GetName(i);
+
+                        if (typeAnalyzer.PropertiesIndex.ContainsKey(key))
+                            typeAnalyzer.PropertiesIndex[key].SetValue(obj, reader[i]);
+                    }
+
+                    results.Add(obj);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex.Message);
+                _logger?.LogError(ex.StackTrace);
+
+                if (ThrowException)
+                    throw;
+            }
+            finally
+            {
+                command?.Dispose();
+
+                _connection?.Close();
+            }
+
+            return results;
+        }
+
+        #region Async versions
+
+        /// <summary>
+        /// Starts the connection, async version.
+        /// </summary>
+        /// <param name="retry">Number of attempts.</param>
+        /// <returns>The open connection.</returns>
         private async Task<IDbConnection> ConnectAsync(int retry = 1)
         {
             _connection?.Close();
@@ -374,13 +469,13 @@ namespace Loaders
         }
 
         /// <summary>
-        /// Run generic query, async version
+        /// Run generic query, async version.
         /// </summary>
-        /// <param name="query">Query to execute</param>
-        /// /// <returns>Results list</returns>
+        /// <param name="query">Query to execute.</param>
+        /// <returns>Results list.</returns>
         public async Task<IEnumerable<object[]>> ExecuteQueryAsync(string query)
         {
-            List<object[]> result = new();
+            List<object[]> results = new();
 
             _connection = await ConnectAsync()
                 .ConfigureAwait(false);
@@ -402,14 +497,10 @@ namespace Loaders
 
                         for (int i = 0; i < reader.FieldCount; ++i)
                         {
-                            object value = reader[i];
-
-                            object castedValue = Convert.ChangeType(value, value.GetType());
-
-                            row.Add(castedValue);
+                            row.Add(reader[i]);
                         }
 
-                        result.Add(row.ToArray());
+                        results.Add(row.ToArray());
                     }
                 }).ConfigureAwait(false);
             }
@@ -439,16 +530,16 @@ namespace Loaders
                 }
             }
 
-            return result;
+            return results;
         }
 
         /// <summary>
-        /// Performs a single parameterized non query, async version
+        /// Performs a single parameterized non query, async version.
         /// </summary>
-        /// <param name="nonQuery">Non query to execute, example: "INSERT INTO TABLE_NAME (ID, DESC) VALUES (@p0, @p1)"</param>
-        /// <param name="parameters">Parameters to replace, example: [ 1, "hello" ]</param>
-        /// <param name="isolationLevel">Set the transaction lock</param>
-        /// <returns>Number of affected rows</returns>
+        /// <param name="nonQuery">Non query to execute, example: "INSERT INTO TABLE_NAME (ID, DESC) VALUES (@p0, @p1)".</param>
+        /// <param name="parameters">Parameters to replace, example: [ 1, "hello" ].</param>
+        /// <param name="isolationLevel">Set the transaction lock.</param>
+        /// <returns>Number of affected rows.</returns>
         public async Task<int> ExecuteNonQueryAsync(String nonQuery, Object[] parameters = null, IsolationLevel isolationLevel = IsolationLevel.Serializable)
         {
             int result = -1;
@@ -550,11 +641,11 @@ namespace Loaders
         }
 
         /// <summary>
-        /// Create a command with multiple non-queries and their parameters, async version
+        /// Create a command with multiple non-queries and their parameters, async version.
         /// </summary>
-        /// <param name="nonQueries">Non queries to execute, example: [ "INSERT INTO TABLE_NAME (ID, DESC) VALUES (@p0, @p1)", "INSERT INTO TABLE_NAME (ID, DESC) VALUES (@p2, @p3)" </param>
-        /// <param name="parameters">Parameters to replace, example: [ 1, "HELLO", 2, "WORLD" ]</param>
-        /// <param name="isolationLevel">Set the transaction lock</param>
+        /// <param name="nonQueries">Non queries to execute, example: [ "INSERT INTO TABLE_NAME (ID, DESC) VALUES (@p0, @p1)", "INSERT INTO TABLE_NAME (ID, DESC) VALUES (@p2, @p3)".</param>
+        /// <param name="parameters">Parameters to replace, example: [ 1, "HELLO", 2, "WORLD" ].</param>
+        /// <param name="isolationLevel">Set the transaction lock.</param>
         public async Task ExecuteNonQueriesAsync(string[] nonQueries, Object[] parameters = null, IsolationLevel isolationLevel = IsolationLevel.Serializable)
         {
             _connection = await ConnectAsync()
@@ -686,5 +777,123 @@ namespace Loaders
                 }
             }
         }
+
+        /// <summary>
+        /// Gets the name of the columns of a specific table, async version.
+        /// </summary>
+        /// <param name="tableName">The name of the table.</param>
+        /// <returns>List of names.</returns>
+        public async Task<IEnumerable<string>> GetColumnsNameAsync(string tableName)
+        {
+            List<string> results = new();
+
+            var query = $"SELECT * FROM {tableName}";
+
+            _connection = Connect();
+
+            IDbCommand command = null;
+
+            try
+            {
+                command = _connection.CreateCommand();
+                command.CommandText = query;
+
+                using var reader = await Task.Run(() => command.ExecuteReader())
+                    .ConfigureAwait(false);
+
+                for (int i = 0; i < reader.FieldCount; ++i)
+                {
+                    results.Add(reader.GetName(i));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex.Message);
+                _logger?.LogError(ex.StackTrace);
+
+                if (ThrowException)
+                    throw;
+            }
+            finally
+            {
+                command?.Dispose();
+
+                _connection?.Close();
+            }
+
+            return results;
+        }
+
+        /// <summary>
+        /// Run Generic query, map the results in a specific entities collection, async version.
+        /// </summary>
+        /// <typeparam name="T">Class that map columns, the name of the columns is case-sensitive.</typeparam>
+        /// <param name="query">Query to execute.</param>
+        /// <returns>Results list of T objects.</returns>
+        public async Task<IEnumerable<T>> ExecuteQueryAsync<T>(string query) where T : class, new()
+        {
+            List<T> results = new();
+
+            _connection = await ConnectAsync()
+                .ConfigureAwait(false);
+
+            IDbCommand command = null;
+
+            TypeAnalyzer<T> typeAnalyzer = new();
+            try
+            {
+                command = _connection.CreateCommand();
+                command.CommandText = query;
+
+                using var reader = await Task.Run(() => command.ExecuteReader())
+                    .ConfigureAwait(false);
+
+                T obj = new();
+                await Task.Run(() =>
+                {
+                    while (reader.Read())
+                    {
+                        for (int i = 0; i < reader.FieldCount; ++i)
+                        {
+                            var key = reader.GetName(i);
+
+                            if (typeAnalyzer.PropertiesIndex.ContainsKey(key))
+                                typeAnalyzer.PropertiesIndex[key].SetValue(obj, reader[i]);
+                        }
+
+                        results.Add(obj);
+                    }
+                }).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                await Task.Run(() =>
+                {
+                    _logger?.LogError(ex.Message);
+                    _logger?.LogError(ex.StackTrace);
+                }).ConfigureAwait(false);
+
+                if (ThrowException)
+                    throw;
+            }
+            finally
+            {
+                if (command != null)
+                {
+                    await Task.Run(() => command.Dispose())
+                        .ConfigureAwait(false);
+                }
+
+                if (_connection != null)
+                {
+                    await Task.Run(() => _connection.Close())
+                        .ConfigureAwait(false);
+                }
+            }
+
+            return results;
+        }
+
+        #endregion Async versions
     }
 }
