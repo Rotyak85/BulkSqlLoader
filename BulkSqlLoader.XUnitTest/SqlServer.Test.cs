@@ -33,6 +33,15 @@ namespace Loaders.Test
         }
 
         [SkippableFact]
+        internal void SqlServerGetColumnsName()
+        {
+            var isDifferent = !string.Equals(_envirnoment.GetSection("Engine").Value, _engineName, StringComparison.CurrentCultureIgnoreCase);
+            Skip.If(isDifferent);
+
+            base.GetColumnsName();
+        }
+
+        [SkippableFact]
         internal object SqlServerCount()
         {
             var isDifferent = !string.Equals(_envirnoment.GetSection("Engine").Value, _engineName, StringComparison.CurrentCultureIgnoreCase);
@@ -42,12 +51,12 @@ namespace Loaders.Test
         }
 
         [SkippableFact]
-        internal void SqlServerDelete()
+        internal void SqlServerDeleteAll()
         {
             var isDifferent = !string.Equals(_envirnoment.GetSection("Engine").Value, _engineName, StringComparison.CurrentCultureIgnoreCase);
             Skip.If(isDifferent);
 
-            base.Delete();
+            base.DeleteAll();
         }
 
         [SkippableFact]
@@ -69,6 +78,26 @@ namespace Loaders.Test
         }
 
         [SkippableFact]
+        internal void SqlServerSelect()
+        {
+            var isDifferent = !string.Equals(_envirnoment.GetSection("Engine").Value, _engineName, StringComparison.CurrentCultureIgnoreCase);
+            Skip.If(isDifferent);
+
+            base.Select();
+        }
+
+        [SkippableFact]
+        internal void SqlServerSelectParametrized()
+        {
+            var isDifferent = !string.Equals(_envirnoment.GetSection("Engine").Value, _engineName, StringComparison.CurrentCultureIgnoreCase);
+            Skip.If(isDifferent);
+
+            base.SelectParamterized();
+        }
+
+        #region Async versions
+
+        [SkippableFact]
         internal async Task SqlServerCountAsync()
         {
             var isDifferent = !string.Equals(_envirnoment.GetSection("Engine").Value, _engineName, StringComparison.CurrentCultureIgnoreCase);
@@ -79,12 +108,12 @@ namespace Loaders.Test
         }
 
         [SkippableFact]
-        internal async Task SqlServerDeleteAsync()
+        internal async Task SqlServerDeleteAllAsync()
         {
             var isDifferent = !string.Equals(_envirnoment.GetSection("Engine").Value, _engineName, StringComparison.CurrentCultureIgnoreCase);
             Skip.If(isDifferent);
 
-            await base.DeleteAsync()
+            await base.DeleteAllAsync()
                 .ConfigureAwait(false);
         }
 
@@ -107,5 +136,17 @@ namespace Loaders.Test
             await base.MassiveInsertAsync()
                 .ConfigureAwait(false);
         }
+
+        [SkippableFact]
+        internal async Task SqlServerSelectAsync()
+        {
+            var isDifferent = !string.Equals(_envirnoment.GetSection("Engine").Value, _engineName, StringComparison.CurrentCultureIgnoreCase);
+            Skip.If(isDifferent);
+
+            await base.SelectAsync()
+                .ConfigureAwait(false);
+        }
+
+        #endregion Async versions
     }
 }

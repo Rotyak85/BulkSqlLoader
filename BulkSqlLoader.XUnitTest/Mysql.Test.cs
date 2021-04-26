@@ -33,21 +33,30 @@ namespace Loaders.Test
         }
 
         [SkippableFact]
+        internal void MysqlGetColumnsName()
+        {
+            var isDifferent = !string.Equals(_envirnoment.GetSection("Engine").Value, _engineName, StringComparison.CurrentCultureIgnoreCase);
+            Skip.If(isDifferent);
+
+            base.GetColumnsName();
+        }
+
+        [SkippableFact]
         internal object MysqlCount()
         {
             var isDifferent = !string.Equals(_envirnoment.GetSection("Engine").Value, _engineName, StringComparison.CurrentCultureIgnoreCase);
             Skip.If(isDifferent);
 
-            return base.CountAsync();
+            return base.Count();
         }
 
         [SkippableFact]
-        internal void MysqlDelete()
+        internal void MysqlDeleteAll()
         {
             var isDifferent = !string.Equals(_envirnoment.GetSection("Engine").Value, _engineName, StringComparison.CurrentCultureIgnoreCase);
             Skip.If(isDifferent);
 
-            base.Delete();
+            base.DeleteAll();
         }
 
         [SkippableFact]
@@ -69,6 +78,26 @@ namespace Loaders.Test
         }
 
         [SkippableFact]
+        internal void MysqlSelect()
+        {
+            var isDifferent = !string.Equals(_envirnoment.GetSection("Engine").Value, _engineName, StringComparison.CurrentCultureIgnoreCase);
+            Skip.If(isDifferent);
+
+            base.Select();
+        }
+
+        [SkippableFact]
+        internal void MysqlSelectParametrized()
+        {
+            var isDifferent = !string.Equals(_envirnoment.GetSection("Engine").Value, _engineName, StringComparison.CurrentCultureIgnoreCase);
+            Skip.If(isDifferent);
+
+            base.SelectParamterized();
+        }
+
+        #region Async versions
+
+        [SkippableFact]
         internal async Task MysqlCountAsync()
         {
             var isDifferent = !string.Equals(_envirnoment.GetSection("Engine").Value, _engineName, StringComparison.CurrentCultureIgnoreCase);
@@ -79,12 +108,12 @@ namespace Loaders.Test
         }
 
         [SkippableFact]
-        internal async Task MysqlDeleteAsync()
+        internal async Task MysqlDeleteAllAsync()
         {
             var isDifferent = !string.Equals(_envirnoment.GetSection("Engine").Value, _engineName, StringComparison.CurrentCultureIgnoreCase);
             Skip.If(isDifferent);
 
-            await base.DeleteAsync()
+            await base.DeleteAllAsync()
                 .ConfigureAwait(false);
         }
 
@@ -107,5 +136,17 @@ namespace Loaders.Test
             await base.MassiveInsertAsync()
                 .ConfigureAwait(false);
         }
+
+        [SkippableFact]
+        internal async Task MysqlSelectAsync()
+        {
+            var isDifferent = !string.Equals(_envirnoment.GetSection("Engine").Value, _engineName, StringComparison.CurrentCultureIgnoreCase);
+            Skip.If(isDifferent);
+
+            await base.SelectAsync()
+                .ConfigureAwait(false);
+        }
+
+        #endregion Async versions
     }
 }
