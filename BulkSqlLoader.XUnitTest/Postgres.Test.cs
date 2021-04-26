@@ -33,21 +33,30 @@ namespace Loaders.Test
         }
 
         [SkippableFact]
+        internal void PostgresGetColumnsName()
+        {
+            var isDifferent = !string.Equals(_envirnoment.GetSection("Engine").Value, _engineName, StringComparison.CurrentCultureIgnoreCase);
+            Skip.If(isDifferent);
+
+            base.GetColumnsName();
+        }
+
+        [SkippableFact]
         internal object PostgresCount()
         {
             var isDifferent = !string.Equals(_envirnoment.GetSection("Engine").Value, _engineName, StringComparison.CurrentCultureIgnoreCase);
             Skip.If(isDifferent);
 
-            return base.CountAsync();
+            return base.Count();
         }
 
         [SkippableFact]
-        internal void PostgresDelete()
+        internal void PostgresDeleteAll()
         {
             var isDifferent = !string.Equals(_envirnoment.GetSection("Engine").Value, _engineName, StringComparison.CurrentCultureIgnoreCase);
             Skip.If(isDifferent);
 
-            base.Delete();
+            base.DeleteAll();
         }
 
         [SkippableFact]
@@ -69,6 +78,26 @@ namespace Loaders.Test
         }
 
         [SkippableFact]
+        internal void PostgresSelect()
+        {
+            var isDifferent = !string.Equals(_envirnoment.GetSection("Engine").Value, _engineName, StringComparison.CurrentCultureIgnoreCase);
+            Skip.If(isDifferent);
+
+            base.Select();
+        }
+
+        [SkippableFact]
+        internal void PostgresSelectParametrized()
+        {
+            var isDifferent = !string.Equals(_envirnoment.GetSection("Engine").Value, _engineName, StringComparison.CurrentCultureIgnoreCase);
+            Skip.If(isDifferent);
+
+            base.SelectParamterized();
+        }
+
+        #region Async versions
+
+        [SkippableFact]
         internal async Task PostgresCountAsync()
         {
             var isDifferent = !string.Equals(_envirnoment.GetSection("Engine").Value, _engineName, StringComparison.CurrentCultureIgnoreCase);
@@ -79,12 +108,12 @@ namespace Loaders.Test
         }
 
         [SkippableFact]
-        internal async Task PostgresDeleteAsync()
+        internal async Task PostgresDeleteAllAsync()
         {
             var isDifferent = !string.Equals(_envirnoment.GetSection("Engine").Value, _engineName, StringComparison.CurrentCultureIgnoreCase);
             Skip.If(isDifferent);
 
-            await base.DeleteAsync()
+            await base.DeleteAllAsync()
                 .ConfigureAwait(false);
         }
 
@@ -107,5 +136,27 @@ namespace Loaders.Test
             await base.MassiveInsertAsync()
                 .ConfigureAwait(false);
         }
+
+        [SkippableFact]
+        internal async Task PostgresSelectAsync()
+        {
+            var isDifferent = !string.Equals(_envirnoment.GetSection("Engine").Value, _engineName, StringComparison.CurrentCultureIgnoreCase);
+            Skip.If(isDifferent);
+
+            await base.SelectAsync()
+                .ConfigureAwait(false);
+        }
+
+        [SkippableFact]
+        internal async Task PostgresSelectParametrizedAsync()
+        {
+            var isDifferent = !string.Equals(_envirnoment.GetSection("Engine").Value, _engineName, StringComparison.CurrentCultureIgnoreCase);
+            Skip.If(isDifferent);
+
+            await base.SelectParamterizedAsync()
+                .ConfigureAwait(false);
+        }
+
+        #endregion Async versions
     }
 }

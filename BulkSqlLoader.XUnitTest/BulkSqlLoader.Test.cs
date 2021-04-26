@@ -4,12 +4,13 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Loaders.Test.Models;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 
 namespace Loaders.Test
 {
-    public abstract partial class BulkSqlLoaderTest
+    public abstract class BulkSqlLoaderTest
     {
         protected string _engineName;
 
@@ -52,6 +53,7 @@ namespace Loaders.Test
             catch (Exception ex)
             {
                 Debug.WriteLine(ex.Message);
+
                 /*if it does not exist, it goes further*/
                 /*because "if exists" isn't in standard sql*/
             }
@@ -76,6 +78,31 @@ namespace Loaders.Test
             }
         }
 
+        /// <summary>
+        /// Gets column names of env:table set in appsettings.json (table to use).
+        /// </summary>
+        protected void GetColumnsName()
+        {
+            var tab = _envirnoment.GetSection("table");
+
+            Assert.True(tab != null, "appsetting.json must contains a table name in the section env:table");
+
+            try
+            {
+                var results = _bulkSqlLoader.GetColumnsName(tab.Value);
+
+                Assert.True(results.Any(), "inserted value does not match total value");
+            }
+            catch (Exception ex)
+            {
+                Assert.True(false, ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Execute countQuery in appsettings.json.
+        /// </summary>
+        /// <returns>Number of rows affected</returns>
         protected long Count()
         {
             long result = -1;
@@ -90,6 +117,12 @@ namespace Loaders.Test
                    .ExecuteQuery(query.Value)
                    .FirstOrDefault()?
                    .FirstOrDefault());
+
+                Debug.WriteLine($"Count: {result}");
+
+                Assert.True((int)result >= 0);
+
+                return result;
             }
             catch (Exception ex)
             {
@@ -97,15 +130,12 @@ namespace Loaders.Test
 
                 return result;
             }
-
-            Debug.WriteLine($"Count: {result}");
-
-            Assert.True((int)result >= 0);
-
-            return result;
         }
 
-        protected void Delete()
+        /// <summary>
+        /// Execute delAllQuery in appsettings.json.
+        /// </summary>
+        protected void DeleteAll()
         {
             var query = _queries.GetSection("delAllQuery");
 
@@ -123,9 +153,58 @@ namespace Loaders.Test
             Assert.True(true);
         }
 
-        protected void SingleInsert()
+        /// <summary>
+        /// Execute selectQuery in appsettings.json.
+        /// </summary>
+        protected void Select()
         {
-            int? result = -1;
+            var query = _queries.GetSection("SelectQuery");
+
+            Assert.True(query != null, "appsetting.json must contains a select count query in the section queries:selectQuery");
+
+            SingleInsert();
+            try
+            {
+                var results = _bulkSqlLoader.ExecuteQuery(query.Value);
+
+                Assert.True(results.Any());
+            }
+            catch (Exception ex)
+            {
+                Assert.True(false, ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Execute selectQuery in appsettings.json and returns a table records instances list.
+        /// </summary>
+        protected void SelectParamterized()
+        {
+            var query = _queries.GetSection("SelectQuery");
+
+            Assert.True(query != null, "appsetting.json must contains a select count query in the section queries:selectQuery");
+
+            SingleInsert();
+            SingleInsert(new object[] { "2", "a", "b", "c", "d" });
+
+            try
+            {
+                var results = _bulkSqlLoader.ExecuteQuery<TEST_TABLE>(query.Value);
+
+                Assert.True(results.Any());
+            }
+            catch (Exception ex)
+            {
+                Assert.True(false, ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Execute insertQuery in appsettings.json.
+        /// </summary>
+        protected void SingleInsert(object[] parameters = null)
+        {
+            parameters ??= new object[] { "1", "a", "b", "c", "d" };
 
             var query = _queries.GetSection("insertQuery");
 
@@ -133,17 +212,21 @@ namespace Loaders.Test
 
             try
             {
-                result = _bulkSqlLoader.ExecuteNonQuery(query.Value,
-                    new object[] { "1", "2", "3", "4", "5" });
+                int? result = _bulkSqlLoader.ExecuteNonQuery(query.Value,
+                    parameters);
+
+                Assert.True(result > 0);
             }
             catch (Exception ex)
             {
                 Assert.True(false, ex.Message);
             }
-
-            Assert.True(result >= 0);
         }
 
+        /// <summary>
+        /// Generates 200.000 non queries to test, it use env:table set in appsettings.json (table to use).
+        /// It depends by DeleteAll and Count methods.
+        /// </summary>
         protected void MassiveInsert()
         {
             Random rng = new();
@@ -184,7 +267,7 @@ namespace Loaders.Test
                 .Select((_, i) => (i as object))
                 .ToArray();
 
-            Delete();
+            DeleteAll();
             try
             {
                 _bulkSqlLoader.ExecuteNonQueries(nonQueries, parameters);
@@ -198,10 +281,35 @@ namespace Loaders.Test
 
             Assert.True(count == queryNumber, "inserted value does not match total value");
         }
-    }
 
-    public abstract partial class BulkSqlLoaderTest
-    {
+        #region Async versions
+
+        /// <summary>
+        /// Gets column names of env:table set in appsettings.json (table to use), async version.
+        /// </summary>
+        protected async Task GetColumnsNameAsync()
+        {
+            var tab = _envirnoment.GetSection("table");
+
+            Assert.True(tab != null, "appsetting.json must contains a table name in the section env:table");
+
+            try
+            {
+                var results = await _bulkSqlLoader.GetColumnsNameAsync(tab.Value)
+                    .ConfigureAwait(false);
+
+                Assert.True(results.Any(), "inserted value does not match total value");
+            }
+            catch (Exception ex)
+            {
+                Assert.True(false, ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Execute countQuery in appsettings.json, async version.
+        /// </summary>
+        /// <returns>Number of rows affected</returns>
         protected async Task<long> CountAsync()
         {
             long result = -1;
@@ -217,6 +325,12 @@ namespace Loaders.Test
                    .ConfigureAwait(false))
                    ?.FirstOrDefault()
                    ?.FirstOrDefault());
+
+                Debug.WriteLine($"Count: {result}");
+
+                Assert.True((int)result >= 0);
+
+                return result;
             }
             catch (Exception ex)
             {
@@ -224,15 +338,12 @@ namespace Loaders.Test
 
                 return result;
             }
-
-            Debug.WriteLine($"Count: {result}");
-
-            Assert.True((int)result >= 0);
-
-            return result;
         }
 
-        protected async Task DeleteAsync()
+        /// <summary>
+        /// Execute delAllQuery in appsettings.json, async version.
+        /// </summary>
+        protected async Task DeleteAllAsync()
         {
             var query = _queries.GetSection("delAllQuery");
 
@@ -242,37 +353,67 @@ namespace Loaders.Test
             {
                 await _bulkSqlLoader.ExecuteNonQueryAsync(query.Value)
                     .ConfigureAwait(false);
+
+                Assert.True(true);
             }
             catch (Exception ex)
             {
                 Assert.True(false, ex.Message);
             }
-
-            Assert.True(true);
         }
 
+        /// <summary>
+        /// Execute selectQuery in appsettings.json and returns a table records instances list, async version.
+        /// </summary>
+        protected async Task SelectAsync()
+        {
+            var query = _queries.GetSection("SelectQuery");
+
+            Assert.True(query != null, "appsetting.json must contains a select count query in the section queries:selectQuery");
+
+            await SingleInsertAsync()
+                .ConfigureAwait(false);
+
+            try
+            {
+                var results = await _bulkSqlLoader.ExecuteQueryAsync(query.Value)
+                    .ConfigureAwait(false);
+
+                Assert.True(results.Any());
+            }
+            catch (Exception ex)
+            {
+                Assert.True(false, ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Execute insertQuery in appsettings.json, async version.
+        /// </summary>
         protected async Task SingleInsertAsync()
         {
-            int? result = -1;
-
             var query = _queries.GetSection("insertQuery");
 
             Assert.True(query != null, "appsetting.json must contains a insert query in the section queries:insertQuery");
 
             try
             {
-                result = await _bulkSqlLoader.ExecuteNonQueryAsync(query.Value,
+                int? result = await _bulkSqlLoader.ExecuteNonQueryAsync(query.Value,
                     new object[] { "1", "2", "3", "4", "5" })
                     .ConfigureAwait(false);
+
+                Assert.True(result > 0);
             }
             catch (Exception ex)
             {
                 Assert.True(false, ex.Message);
             }
-
-            Assert.True(result >= 0);
         }
 
+        /// <summary>
+        /// Generates 200.000 non queries to test, it use env:table set in appsettings.json (table to use), async version.
+        /// It depends by Delete and Count methods.
+        /// </summary>
         protected async Task MassiveInsertAsync()
         {
             Random rng = new();
@@ -313,7 +454,7 @@ namespace Loaders.Test
                 .Select((_, i) => (i as object))
                 .ToArray();
 
-            await DeleteAsync()
+            await DeleteAllAsync()
                 .ConfigureAwait(false);
 
             try
@@ -331,5 +472,32 @@ namespace Loaders.Test
 
             Assert.True(count == queryNumber, "inserted value does not match total value");
         }
+
+        /// <summary>
+        /// Execute selectQuery in appsettings.json and returns a table records instances list, async version.
+        /// </summary>
+        protected async Task SelectParamterizedAsync()
+        {
+            var query = _queries.GetSection("SelectQuery");
+
+            Assert.True(query != null, "appsetting.json must contains a select count query in the section queries:selectQuery");
+
+            SingleInsert();
+            SingleInsert(new object[] { "2", "a", "b", "c", "d" });
+
+            try
+            {
+                var results = await _bulkSqlLoader.ExecuteQueryAsync<TEST_TABLE>(query.Value)
+                    .ConfigureAwait(false);
+
+                Assert.True(results.Any());
+            }
+            catch (Exception ex)
+            {
+                Assert.True(false, ex.Message);
+            }
+        }
+
+        #endregion Async versions
     }
 }
