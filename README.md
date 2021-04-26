@@ -77,3 +77,11 @@ The following example is just to show how the "nonQueries", "parameters" args ca
             var parameters = new object[queryNumber * columnsTestTable]
                 .Select((_, i) => (i as object))
                 .ToArray();
+
+It is possible to query the db in a generic way with the executeQuery methods:
+
+	IEnumerable<TEST_TABLE> results = bulkSqlLoader.ExecuteQuery<TEST_TABLE>(query);
+	
+or more generically:
+
+	IEnumerable<object[]> results = bulkSqlLoader.ExecuteQuery(query);
