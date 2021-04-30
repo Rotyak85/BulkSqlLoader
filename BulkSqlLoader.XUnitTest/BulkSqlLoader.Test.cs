@@ -185,7 +185,7 @@ namespace Loaders.Test
             Assert.True(query != null, "appsetting.json must contains a select count query in the section queries:selectQuery");
 
             SingleInsert();
-            SingleInsert(new object[] { "2", "a", "b", "c", "d" });
+            SingleInsert(new object[] { "2", DBNull.Value, "b", "c", "d" });
 
             try
             {

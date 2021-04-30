@@ -404,8 +404,14 @@ namespace Loaders
                     {
                         var key = reader.GetName(i);
 
+                        var value = (reader[i] is DBNull) ? null : reader[i];
+
+                        /*it gives the default if value is null and property is a value type*/
                         if (typeAnalyzer.PropertiesIndex.ContainsKey(key))
-                            typeAnalyzer.PropertiesIndex[key].SetValue(obj, reader[i]);
+                        {
+                            typeAnalyzer.PropertiesIndex[key]
+                                .SetValue(obj, value);
+                        }
                     }
 
                     results.Add(obj);
