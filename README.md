@@ -27,8 +27,8 @@ Initialization:
 
             _bulkSqlLoader = new BulkSqlLoader(
                 conn,
-                throwException: true, paramsBatchLimit:
-                paramsBatchLimit); //for example: sqlserver 2017 express has 2100
+                throwException: true, 
+		paramsBatchLimit: paramsBatchLimit); //for example: sqlserver 2017 express has 2100
 
 Use:
     
