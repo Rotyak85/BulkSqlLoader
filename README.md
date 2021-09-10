@@ -19,7 +19,7 @@ Here are the limit parameter numbers for some servers:
 
 Initialization:
 
-
+```csharp
             var connectionString = _connectionStrings.GetSection("Mysql:connectionString").Value;
             var paramsBatchLimit = Convert.ToInt32(_envirnoment.GetSection("paramsBatchLimit").Value);
 
@@ -29,9 +29,9 @@ Initialization:
                 conn,
                 throwException: true, 
 		paramsBatchLimit: paramsBatchLimit); //for example: sqlserver 2017 express has 2100
-
+```
 Use:
-    
+ ```csharp   
             try
             {
                 await _bulkSqlLoader.ExecuteNonQueriesAsync(nonQueries, parameters)
@@ -41,9 +41,9 @@ Use:
             {
                //excpetion handler code
             }
-                  
+ ```                 
 The following example is just to show how the "nonQueries", "parameters" args can be structured
-            
+```csharp            
             /*example: generate 200000 non queries with 1M random parameters*/
             
             Random rng = new();
@@ -77,11 +77,12 @@ The following example is just to show how the "nonQueries", "parameters" args ca
             var parameters = new object[queryNumber * columnsTestTable]
                 .Select((_, i) => (i as object))
                 .ToArray();
-
+```
 It is possible to query the db in a generic way with the executeQuery methods:
-
+```csharp
 	IEnumerable<TEST_TABLE> results = bulkSqlLoader.ExecuteQuery<TEST_TABLE>(query);
-	
+```	
 or more generically:
-
+```csharp
 	IEnumerable<object[]> results = bulkSqlLoader.ExecuteQuery(query);
+```
