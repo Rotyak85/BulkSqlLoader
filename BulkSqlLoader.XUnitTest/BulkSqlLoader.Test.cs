@@ -1,11 +1,11 @@
+using Loaders.Test.Models;
+using Microsoft.Extensions.Configuration;
 using System;
 using System.Data;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Loaders.Test.Models;
-using Microsoft.Extensions.Configuration;
 using Xunit;
 
 namespace Loaders.Test
@@ -95,7 +95,7 @@ namespace Loaders.Test
             }
             catch (Exception ex)
             {
-                Assert.True(false, ex.Message);
+                Assert.Fail(ex.Message);
             }
         }
 
@@ -126,7 +126,7 @@ namespace Loaders.Test
             }
             catch (Exception ex)
             {
-                Assert.True(false, ex.Message);
+                Assert.Fail(ex.Message);
 
                 return result;
             }
@@ -147,7 +147,7 @@ namespace Loaders.Test
             }
             catch (Exception ex)
             {
-                Assert.True(false, ex.Message);
+                Assert.Fail(ex.Message);
             }
 
             Assert.True(true);
@@ -171,7 +171,7 @@ namespace Loaders.Test
             }
             catch (Exception ex)
             {
-                Assert.True(false, ex.Message);
+                Assert.Fail(ex.Message);
             }
         }
 
@@ -195,7 +195,7 @@ namespace Loaders.Test
             }
             catch (Exception ex)
             {
-                Assert.True(false, ex.Message);
+                Assert.Fail(ex.Message);
             }
         }
 
@@ -204,7 +204,7 @@ namespace Loaders.Test
         /// </summary>
         protected void SingleInsert(object[] parameters = null)
         {
-            parameters ??= new object[] { "1", "a", "b", "c", "d" };
+            parameters ??= ["1", "a", "b", "c", "d"];
 
             var query = _queries.GetSection("insertQuery");
 
@@ -219,7 +219,7 @@ namespace Loaders.Test
             }
             catch (Exception ex)
             {
-                Assert.True(false, ex.Message);
+                Assert.Fail(ex.Message);
             }
         }
 
@@ -274,7 +274,7 @@ namespace Loaders.Test
             }
             catch (Exception ex)
             {
-                Assert.True(false, ex.Message);
+                Assert.Fail(ex.Message);
             }
 
             long count = Count();
@@ -302,7 +302,7 @@ namespace Loaders.Test
             }
             catch (Exception ex)
             {
-                Assert.True(false, ex.Message);
+                Assert.Fail(ex.Message);
             }
         }
 
@@ -334,7 +334,7 @@ namespace Loaders.Test
             }
             catch (Exception ex)
             {
-                Assert.True(false, ex.Message);
+                Assert.Fail(ex.Message);
 
                 return result;
             }
@@ -358,7 +358,7 @@ namespace Loaders.Test
             }
             catch (Exception ex)
             {
-                Assert.True(false, ex.Message);
+                Assert.Fail(ex.Message);
             }
         }
 
@@ -383,7 +383,7 @@ namespace Loaders.Test
             }
             catch (Exception ex)
             {
-                Assert.True(false, ex.Message);
+                Assert.Fail(ex.Message);
             }
         }
 
@@ -406,7 +406,7 @@ namespace Loaders.Test
             }
             catch (Exception ex)
             {
-                Assert.True(false, ex.Message);
+                Assert.Fail(ex.Message);
             }
         }
 
@@ -464,7 +464,7 @@ namespace Loaders.Test
             }
             catch (Exception ex)
             {
-                Assert.True(false, ex.Message);
+                Assert.Fail(ex.Message);
             }
 
             long count = (long)(await CountAsync()
@@ -494,7 +494,7 @@ namespace Loaders.Test
             }
             catch (Exception ex)
             {
-                Assert.True(false, ex.Message);
+                Assert.Fail(ex.Message);
             }
         }
 
