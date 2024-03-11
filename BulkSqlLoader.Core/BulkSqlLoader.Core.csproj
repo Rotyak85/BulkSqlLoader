@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
@@ -7,9 +7,9 @@
     <PackageLicenseFile>BulkSqlLoader.Core.License.txt</PackageLicenseFile>
     <PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
     <RootNamespace>Loaders</RootNamespace>
-    <Version>2.1.1.2</Version>
-    <AssemblyVersion>2.1.1.2</AssemblyVersion>
-    <FileVersion>2.1.1.2</FileVersion>
+    <Version>2.1.2.2</Version>
+    <AssemblyVersion>2.1.2.2</AssemblyVersion>
+    <FileVersion>2.1.2.2</FileVersion>
     <Company>Saimon Ferrari</Company>
     <Description>A library for massive insertion of queries with multiple parameters</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
