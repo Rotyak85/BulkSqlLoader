@@ -28,7 +28,7 @@ namespace Loaders.Test
             }
             catch (Exception ex)
             {
-                Assert.True(false, $"Cannot intitialize test for {_engineName}: {ex.Message}");
+                Assert.Fail($"Cannot intitialize test for {_engineName}: {ex.Message}");
             }
         }
 

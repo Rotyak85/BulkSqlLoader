@@ -1,7 +1,7 @@
-﻿using System;
+﻿using MySql.Data.MySqlClient;
+using System;
 using System.Data;
 using System.Threading.Tasks;
-using MySql.Data.MySqlClient;
 using Xunit;
 
 namespace Loaders.Test
@@ -28,7 +28,7 @@ namespace Loaders.Test
             }
             catch (Exception ex)
             {
-                Assert.True(false, $"Cannot intitialize test for {_engineName}: {ex.Message}");
+                Assert.Fail($"Cannot intitialize test for {_engineName}: {ex.Message}");
             }
         }
 
