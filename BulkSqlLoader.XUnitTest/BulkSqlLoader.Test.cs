@@ -1,7 +1,6 @@
 using Loaders.Test.Models;
 using Microsoft.Extensions.Configuration;
 using System;
-using System.Data;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
@@ -257,14 +256,10 @@ namespace Loaders.Test
                 sb.AppendLine(nonQuery);
             }
 
-            var nonQueries = sb.ToString().Split("\r\n");
-
-            nonQueries = nonQueries
-                .Where((_, i) => i != nonQueries.Length - 1)
-                .ToArray();
+            var nonQueries = sb.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
 
             var parameters = new object[queryNumber * columnsTestTable]
-                .Select((_, i) => (i as object))
+                .Select((_, i) => (object)i)
                 .ToArray();
 
             DeleteAll();
@@ -444,14 +439,10 @@ namespace Loaders.Test
                 sb.AppendLine(nonQuery);
             }
 
-            var nonQueries = sb.ToString().Split("\r\n");
-
-            nonQueries = nonQueries
-                .Where((_, i) => i != nonQueries.Length - 1)
-                .ToArray();
+            var nonQueries = sb.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
 
             var parameters = new object[queryNumber * columnsTestTable]
-                .Select((_, i) => (i as object))
+                .Select((_, i) => (object)i)
                 .ToArray();
 
             await DeleteAllAsync()

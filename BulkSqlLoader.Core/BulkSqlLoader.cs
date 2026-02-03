@@ -1,22 +1,19 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
 namespace Loaders;
 
-public class BulkSqlLoader
+public sealed class BulkSqlLoader
 {
-    /// <summary>
-    /// Connection passed in constructor.
-    /// </summary>
     private IDbConnection _connection;
 
     /// <summary>
-    /// ILogger instance for logging.
+    /// Readonly per ottimizzazione JIT.
     /// </summary>
     private readonly ILogger _logger;
 
@@ -59,34 +56,46 @@ public class BulkSqlLoader
     /// </summary>
     /// <param name="retry">Number of attempts.</param>
     /// <returns>The open connection.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] // Inline to avoid call overhead
     private IDbConnection Connect(int retry = 1)
     {
-        _connection?.Close();
-
-        var attempt = 1;
-        START:
+        // Check if already open - avoid accessing State on disposed connection
         try
         {
-            _connection?.Open();
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogError(ex.Message);
-            _logger?.LogError(ex.StackTrace);
-
-            _logger?.LogError("Connection attempt number {Attempt} failed", attempt);
-
-            ++attempt;
-
-            if (attempt <= retry)
+            if (_connection is not null && _connection.State == ConnectionState.Open)
             {
-                goto START;
+                return _connection;
             }
+        }
+        catch (ObjectDisposedException)
+        {
+            // Connection was disposed, will need to reopen
+        }
 
-            _connection?.Dispose();
+        // Goto removed from previous code, using loop for better branch prediction
+        for (var attempt = 1; attempt <= retry; attempt++)
+        {
+            try
+            {
+                if (_connection is not null && _connection.State == ConnectionState.Closed)
+                {
+                    _connection.Open();
+                }
+                break; // Success, exit loop
+            }
+            catch (Exception ex)
+            {
+                if (_logger is not null)
+                {
+                    _logger.LogError(ex, "Connection attempt number {Attempt} failed", attempt);
+                }
 
-            /*if connection goes wrong we can't do anything else: throws up the exception*/
-            throw;
+                if (attempt == retry)
+                {
+                    // DON'T dispose - let the caller handle it
+                    throw;
+                }
+            }
         }
 
         return _connection;
@@ -110,22 +119,28 @@ public class BulkSqlLoader
             command.CommandText = query;
 
             using var reader = command.ExecuteReader();
+            var fieldCount = reader.FieldCount;
+            
             while (reader.Read())
             {
-                var row = new List<object>();
+                // Allocazione precisa per evitare resize della List interna
+                var row = new object[fieldCount];
 
-                for (var i = 0; i < reader.FieldCount; ++i)
+                // LINQ rimosso dal precedente codice, Loop manuale più veloce
+                for (var i = 0; i < fieldCount; ++i)
                 {
-                    row.Add(reader[i]);
+                    row[i] = reader[i];
                 }
 
-                results.Add(row.ToArray());
+                results.Add(row);
             }
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex.Message);
-            _logger?.LogError(ex.StackTrace);
+            if (_logger is not null)
+            {
+                _logger.LogError(ex, "ExecuteQuery failed");
+            }
 
             if (ThrowException)
             {
@@ -135,11 +150,27 @@ public class BulkSqlLoader
         finally
         {
             command?.Dispose();
-
             _connection?.Close();
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// Count with span to avoid allocations.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int CountParameters(ReadOnlySpan<char> query)
+    {
+        var count = 0;
+        
+        //ReadOnlySpan<char> to get zero-allocation string processing.
+        foreach (var c in query)
+        {
+            if (c == '@')
+                count++;
+        }
+        return count;
     }
 
     /// <summary>
@@ -149,7 +180,7 @@ public class BulkSqlLoader
     /// <param name="parameters">Parameters to replace, example: [ 1, "hello" ].</param>
     /// <param name="isolationLevel">Set the transaction lock.</param>
     /// <returns>Number of affected rows</returns>
-    public int ExecuteNonQuery(string nonQuery, Object[] parameters = null, IsolationLevel isolationLevel = IsolationLevel.Serializable)
+    public int ExecuteNonQuery(string nonQuery, object[] parameters = null, IsolationLevel isolationLevel = IsolationLevel.Serializable)
     {
         var result = -1;
 
@@ -165,27 +196,18 @@ public class BulkSqlLoader
             transaction = _connection.BeginTransaction(isolationLevel);
             command.Transaction = transaction;
 
-            _connection.CreateCommand();
+            var numberOfParameterQuery = CountParameters(nonQuery.AsSpan());
 
-            var numberOfParameterQuery = 0;
-            for (var i = 0; i < nonQuery.Length; ++i)
-            {
-                if (nonQuery[i] == '@')
-                    ++numberOfParameterQuery;
-            }
-
+            // Pre-allocation to avoid multiple resizes
             for (var i = 0; i < numberOfParameterQuery; ++i)
             {
                 var parameter = command.CreateParameter();
-
-                parameter.ParameterName = "@p" + i;
+                parameter.ParameterName = $"@p{i}";
                 parameter.Value = parameters[i];
-
                 command.Parameters.Add(parameter);
             }
 
             result = command.ExecuteNonQuery();
-
             transaction.Commit();
         }
         catch (Exception ex)
@@ -196,14 +218,16 @@ public class BulkSqlLoader
             }
             catch (Exception ex1)
             {
-                _logger?.LogError(ex1.Message);
-                _logger?.LogError(ex1.StackTrace);
-
-                /*Rollback exception isn't throw out in favor of the higher exception*/
+                if (_logger is not null)
+                {
+                    _logger.LogError(ex1, "Rollback failed");
+                }
             }
 
-            _logger?.LogError(ex.Message);
-            _logger?.LogError(ex.StackTrace);
+            if (_logger is not null)
+            {
+                _logger.LogError(ex, "ExecuteNonQuery failed");
+            }
 
             if (ThrowException)
                 throw;
@@ -211,7 +235,6 @@ public class BulkSqlLoader
         finally
         {
             transaction?.Dispose();
-
             command?.Dispose();
 
             _connection?.Close();
@@ -233,49 +256,42 @@ public class BulkSqlLoader
         IDbCommand command = null;
         IDbTransaction transaction = null;
 
-        /*counts the progressive number of batch's parameters during iteration*/
         var paramsCounter = 0;
-
-        /*contains the position of the first non-query that will end up in the next batch, every batch it increments of BatchSize*/
         var queryIterator = 0;
 
-        /*contains the progressive number of batches already executed*/
         try
         {
             while (queryIterator < nonQueries.Length)
             {
                 command = _connection.CreateCommand();
 
-                var queryBuilder = new StringBuilder();
+                // Pre-allocate StringBuilder with reasonable capacity to avoid resize
+                // Estimate: average 100 chars per query * average batch size
+                var queryBuilder = new StringBuilder(capacity: 1024);
 
-                /*support variable to not change queryIterator during loop*/
                 var nQueriesInBatch = 0;
-
                 var totBatchParams = 0;
+                
                 for (var j = queryIterator; j < nonQueries.Length; ++j)
                 {
                     var nonQuery = nonQueries[j];
 
-                    var nParams = nonQuery.Count(c => c == '@');
+                    var nParams = CountParameters(nonQuery.AsSpan());
 
                     if (totBatchParams + nParams < ParamsBatchLimit)
                     {
-                        queryBuilder.Append(nonQuery)
-                            .Append(';');
+                        queryBuilder.Append(nonQuery).Append(';');
 
                         for (var i = 0; i < nParams; ++i)
                         {
                             var parameter = command.CreateParameter();
-
-                            parameter.ParameterName = "@p" + (paramsCounter + i);
+                            parameter.ParameterName = $"@p{paramsCounter + i}"; 
                             parameter.Value = parameters[paramsCounter + i];
-
                             command.Parameters.Add(parameter);
                         }
 
                         paramsCounter += nParams;
                         totBatchParams += nParams;
-
                         ++nQueriesInBatch;
                     }
                     else
@@ -304,14 +320,16 @@ public class BulkSqlLoader
             }
             catch (Exception ex1)
             {
-                _logger?.LogError(ex1.Message);
-                _logger?.LogError(ex1.StackTrace);
-
-                /*if ThrowException it throw main exception "ex"*/
+                if (_logger is not null)
+                {
+                    _logger.LogError(ex1, "Rollback failed in ExecuteNonQueries");
+                }
             }
 
-            _logger?.LogError(ex.Message);
-            _logger?.LogError(ex.StackTrace);
+            if (_logger is not null)
+            {
+                _logger.LogError(ex, "ExecuteNonQueries failed");
+            }
 
             if (ThrowException)
             {
@@ -321,7 +339,6 @@ public class BulkSqlLoader
         finally
         {
             transaction?.Dispose();
-
             command?.Dispose();
 
             _connection?.Close();
@@ -335,7 +352,8 @@ public class BulkSqlLoader
     /// <returns>List of names.</returns>
     public IEnumerable<string> GetColumnsName(string tableName)
     {
-        List<string> results = new();
+        // Collection expression iniziale vuota
+        List<string> results = [];
 
         var query = $"SELECT * FROM {tableName}";
 
@@ -350,15 +368,21 @@ public class BulkSqlLoader
 
             using var reader = command.ExecuteReader();
 
-            for (var i = 0; i < reader.FieldCount; ++i)
+            var fieldCount = reader.FieldCount;
+            
+            results = new List<string>(fieldCount);
+
+            for (var i = 0; i < fieldCount; ++i)
             {
                 results.Add(reader.GetName(i));
             }
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex.Message);
-            _logger?.LogError(ex.StackTrace);
+            if (_logger is not null)
+            {
+                _logger.LogError(ex, "GetColumnsName failed for table {TableName}", tableName);
+            }
 
             if (ThrowException)
                 throw;
@@ -381,7 +405,7 @@ public class BulkSqlLoader
     /// <returns>Results list of T objects.</returns>
     public IEnumerable<T> ExecuteQuery<T>(string query) where T : class, new()
     {
-        List<T> results = new();
+        List<T> results = [];
 
         _connection = Connect();
 
@@ -395,20 +419,20 @@ public class BulkSqlLoader
 
             using var reader = command.ExecuteReader();
 
-            T obj = new();
             while (reader.Read())
             {
-                for (var i = 0; i < reader.FieldCount; ++i)
+                T obj = new();
+                
+                var fieldCount = reader.FieldCount;
+                for (var i = 0; i < fieldCount; ++i)
                 {
                     var key = reader.GetName(i);
+                    var value = reader[i];
 
-                    var value = (reader[i] is DBNull) ? null : reader[i];
-
-                    /*it gives the default if value is null and property is a value type*/
-                    if (typeAnalyzer.PropertiesIndex.ContainsKey(key))
+                    // ContainsKey + indexer removed from previous code, TryGetValue is more efficient
+                    if (typeAnalyzer.PropertiesIndex.TryGetValue(key, out var propertyInfo))
                     {
-                        typeAnalyzer.PropertiesIndex[key]
-                            .SetValue(obj, value);
+                        propertyInfo.SetValue(obj, value is DBNull ? null : value);
                     }
                 }
 
@@ -417,8 +441,10 @@ public class BulkSqlLoader
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex.Message);
-            _logger?.LogError(ex.StackTrace);
+            if (_logger is not null)
+            {
+                _logger.LogError(ex, "ExecuteQuery<T> failed");
+            }
 
             if (ThrowException)
                 throw;
@@ -440,35 +466,45 @@ public class BulkSqlLoader
     /// </summary>
     /// <param name="retry">Number of attempts.</param>
     /// <returns>The open connection.</returns>
-    private async Task<IDbConnection> ConnectAsync(int retry = 1)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private async ValueTask<IDbConnection> ConnectAsync(int retry = 1)
     {
-        _connection?.Close();
-
-        var attempt = 1;
-        START:
+        // Check if already open - avoid accessing State on disposed connection
         try
         {
-            await Task.Run(() => _connection?.Open())
-                .ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogError(ex.Message);
-            _logger?.LogError(ex.StackTrace);
-
-            _logger?.LogError($"Connection attempt number {attempt} failed");
-
-            ++attempt;
-
-            if (attempt <= retry)
+            if (_connection is not null && _connection.State == ConnectionState.Open)
             {
-                goto START;
+                return _connection;
             }
+        }
+        catch (ObjectDisposedException)
+        {
+            // Connection was disposed, will need to reopen
+        }
 
-            _connection?.Dispose();
+        for (var attempt = 1; attempt <= retry; attempt++)
+        {
+            try
+            {
+                if (_connection is not null && _connection.State == ConnectionState.Closed)
+                {
+                    await Task.Run(() => _connection.Open())
+                        .ConfigureAwait(false);
+                }
+                break; // Success, exit loop
+            }
+            catch (Exception ex)
+            {
+                if (_logger is not null)
+                {
+                    _logger.LogError(ex, "Connection async attempt number {Attempt} failed", attempt);
+                }
 
-            /*if connection goes wrong we can't do anything else: throws up the exception*/
-            throw;
+                if (attempt == retry)
+                {
+                    throw;
+                }
+            }
         }
 
         return _connection;
@@ -481,10 +517,9 @@ public class BulkSqlLoader
     /// <returns>Results list.</returns>
     public async Task<IEnumerable<object[]>> ExecuteQueryAsync(string query)
     {
-        List<object[]> results = new();
+        List<object[]> results = [];
 
-        _connection = await ConnectAsync()
-            .ConfigureAwait(false);
+        _connection = await ConnectAsync().ConfigureAwait(false);
 
         IDbCommand command = null;
         try
@@ -492,48 +527,46 @@ public class BulkSqlLoader
             command = _connection.CreateCommand();
             command.CommandText = query;
 
-            using var reader = await Task.Run(() => command.ExecuteReader())
+            var reader = await Task.Run(() => command.ExecuteReader())
                 .ConfigureAwait(false);
 
             await Task.Run(() =>
             {
-                while (reader.Read())
+                try
                 {
-                    var row = new List<object>();
-
-                    for (int i = 0; i < reader.FieldCount; ++i)
+                    var fieldCount = reader.FieldCount;
+                    while (reader.Read())
                     {
-                        row.Add(reader[i]);
-                    }
+                        var row = new object[fieldCount];
 
-                    results.Add(row.ToArray());
+                        for (var i = 0; i < fieldCount; ++i)
+                        {
+                            row[i] = reader[i];
+                        }
+
+                        results.Add(row);
+                    }
+                }
+                finally
+                {
+                    reader.Dispose();
                 }
             }).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            await Task.Run(() =>
+            if (_logger is not null)
             {
-                _logger?.LogError(ex.Message);
-                _logger?.LogError(ex.StackTrace);
-            }).ConfigureAwait(false);
+                _logger.LogError(ex, "ExecuteQueryAsync failed");
+            }
 
             if (ThrowException)
                 throw;
         }
         finally
         {
-            if (command != null)
-            {
-                await Task.Run(() => command.Dispose())
-                    .ConfigureAwait(false);
-            }
-
-            if (_connection != null)
-            {
-                await Task.Run(() => _connection.Close())
-                    .ConfigureAwait(false);
-            }
+            command?.Dispose();
+            _connection?.Close();
         }
 
         return results;
@@ -546,12 +579,11 @@ public class BulkSqlLoader
     /// <param name="parameters">Parameters to replace, example: [ 1, "hello" ].</param>
     /// <param name="isolationLevel">Set the transaction lock.</param>
     /// <returns>Number of affected rows.</returns>
-    public async Task<int> ExecuteNonQueryAsync(String nonQuery, Object[] parameters = null, IsolationLevel isolationLevel = IsolationLevel.Serializable)
+    public async Task<int> ExecuteNonQueryAsync(string nonQuery, object[] parameters = null, IsolationLevel isolationLevel = IsolationLevel.Serializable)
     {
-        int result = -1;
+        var result = -1;
 
-        _connection = await ConnectAsync()
-            .ConfigureAwait(false);
+        _connection = await ConnectAsync().ConfigureAwait(false);
 
         IDbCommand command = null;
         IDbTransaction transaction = null;
@@ -560,35 +592,28 @@ public class BulkSqlLoader
             command = _connection.CreateCommand();
             command.CommandText = nonQuery;
 
-            transaction = await Task.Run(() => _connection.BeginTransaction(isolationLevel))
-                .ConfigureAwait(false);
-
+            transaction = await Task.Run(() => _connection.BeginTransaction(isolationLevel)).ConfigureAwait(false);
             command.Transaction = transaction;
 
-            _connection.CreateCommand();
-
-            var numberOfParameterQuery = 0;
-            for (var i = 0; i < nonQuery.Length; ++i)
-            {
-                if (nonQuery[i] == '@')
-                    ++numberOfParameterQuery;
-            }
+            var numberOfParameterQuery = CountParameters(nonQuery.AsSpan());
 
             for (var i = 0; i < numberOfParameterQuery; ++i)
             {
                 var parameter = command.CreateParameter();
-
-                parameter.ParameterName = "@p" + i;
+                
+                parameter.ParameterName = $"@p{i}";
                 parameter.Value = parameters[i];
-
                 command.Parameters.Add(parameter);
             }
 
+            var cmd = command;
+            var trans = transaction;
+            
             result = await Task.Run(() =>
             {
-                var r = command.ExecuteNonQuery();
-                transaction.Commit();
-
+                var r = cmd.ExecuteNonQuery();
+                
+                trans.Commit();
                 return r;
             }).ConfigureAwait(false);
         }
@@ -596,51 +621,29 @@ public class BulkSqlLoader
         {
             try
             {
-                if (transaction != null)
+                if (transaction is not null)
                 {
-                    await Task.Run(() => transaction.Rollback())
+                    var trans = transaction;
+                    await Task.Run(() => trans.Rollback())
                         .ConfigureAwait(false);
                 }
             }
             catch (Exception ex1)
             {
-                await Task.Run(() =>
-                {
-                    _logger?.LogError(ex1.Message);
-                    _logger?.LogError(ex1.StackTrace);
-                }).ConfigureAwait(false);
-
-                /*if ThrowException it throw main exception "ex"*/
+                _logger?.LogError(ex1, "Rollback failed in ExecuteNonQueryAsync");
             }
 
-            await Task.Run(() =>
-            {
-                _logger?.LogError(ex.Message);
-                _logger?.LogError(ex.StackTrace);
-            }).ConfigureAwait(false);
+            _logger?.LogError(ex, "ExecuteNonQueryAsync failed");
 
             if (ThrowException)
                 throw;
         }
         finally
         {
-            if (transaction != null)
-            {
-                await Task.Run(() => transaction.Dispose())
-                    .ConfigureAwait(false);
-            }
-
-            if (command != null)
-            {
-                await Task.Run(() => command.Dispose())
-                    .ConfigureAwait(false);
-            }
-
-            if (_connection != null)
-            {
-                await Task.Run(() => _connection.Close())
-                    .ConfigureAwait(false);
-            }
+            transaction?.Dispose();
+            command?.Dispose();
+            
+            _connection?.Close();
         }
 
         return result;
@@ -652,57 +655,47 @@ public class BulkSqlLoader
     /// <param name="nonQueries">Non queries to execute, example: [ "INSERT INTO TABLE_NAME (ID, DESC) VALUES (@p0, @p1)", "INSERT INTO TABLE_NAME (ID, DESC) VALUES (@p2, @p3)".</param>
     /// <param name="parameters">Parameters to replace, example: [ 1, "HELLO", 2, "WORLD" ].</param>
     /// <param name="isolationLevel">Set the transaction lock.</param>
-    public async Task ExecuteNonQueriesAsync(string[] nonQueries, Object[] parameters = null, IsolationLevel isolationLevel = IsolationLevel.Serializable)
+    public async Task ExecuteNonQueriesAsync(string[] nonQueries, object[] parameters = null, IsolationLevel isolationLevel = IsolationLevel.Serializable)
     {
-        _connection = await ConnectAsync()
-            .ConfigureAwait(false);
+        _connection = await ConnectAsync().ConfigureAwait(false);
 
         IDbCommand command = null;
         IDbTransaction transaction = null;
 
-        /*counts the progressive number of batch's parameters during iteration*/
         var paramsCounter = 0;
-
-        /*contains the position of the first non-query that will end up in the next batch, every batch it increments of BatchSize*/
         var queryIterator = 0;
 
-        /*contains the progressive number of batches already executed*/
         try
         {
             while (queryIterator < nonQueries.Length)
             {
                 command = _connection.CreateCommand();
 
-                var queryBuilder = new StringBuilder();
+                var queryBuilder = new StringBuilder(capacity: 1024);
 
-                /*support variable to not change queryIterator during loop*/
                 var nQueriesInBatch = 0;
-
                 var totBatchParams = 0;
-                for (int j = queryIterator; j < nonQueries.Length; ++j)
+                
+                for (var j = queryIterator; j < nonQueries.Length; ++j)
                 {
                     var nonQuery = nonQueries[j];
 
-                    var nParams = nonQuery.Count(c => c == '@');
+                    var nParams = CountParameters(nonQuery.AsSpan());
 
                     if (totBatchParams + nParams < ParamsBatchLimit)
                     {
-                        queryBuilder.Append(nonQuery)
-                            .Append(';');
+                        queryBuilder.Append(nonQuery).Append(';');
 
-                        for (int i = 0; i < nParams; ++i)
+                        for (var i = 0; i < nParams; ++i)
                         {
                             var parameter = command.CreateParameter();
-
-                            parameter.ParameterName = "@p" + (paramsCounter + i);
+                            parameter.ParameterName = $"@p{paramsCounter + i}";
                             parameter.Value = parameters[paramsCounter + i];
-
                             command.Parameters.Add(parameter);
                         }
 
                         paramsCounter += nParams;
                         totBatchParams += nParams;
-
                         ++nQueriesInBatch;
                     }
                     else
@@ -713,17 +706,18 @@ public class BulkSqlLoader
 
                 queryIterator += nQueriesInBatch;
 
-                transaction = await Task.Run(() => _connection.BeginTransaction(isolationLevel))
-                    .ConfigureAwait(false);
+                transaction = await Task.Run(() => _connection.BeginTransaction(isolationLevel)).ConfigureAwait(false);
 
                 command.CommandText = queryBuilder.ToString();
                 command.Transaction = transaction;
 
+                var cmd = command;
+                var trans = transaction;
+                
                 await Task.Run(() =>
                 {
-                    command.ExecuteNonQuery();
-
-                    transaction.Commit();
+                    cmd.ExecuteNonQuery();
+                    trans.Commit();
                 }).ConfigureAwait(false);
             }
         }
@@ -731,51 +725,27 @@ public class BulkSqlLoader
         {
             try
             {
-                if (transaction != null)
+                if (transaction is not null)
                 {
-                    await Task.Run(() => transaction.Rollback())
-                        .ConfigureAwait(false);
+                    var trans = transaction;
+                    await Task.Run(() => trans.Rollback()).ConfigureAwait(false);
                 }
             }
             catch (Exception ex1)
             {
-                await Task.Run(() =>
-                {
-                    _logger?.LogError(ex1.Message);
-                    _logger?.LogError(ex1.StackTrace);
-                }).ConfigureAwait(false);
-
-                /*if ThrowException it throw main exception "ex"*/
+                _logger?.LogError(ex1, "Rollback failed in ExecuteNonQueriesAsync");
             }
 
-            await Task.Run(() =>
-            {
-                _logger?.LogError(ex.Message);
-                _logger?.LogError(ex.StackTrace);
-            }).ConfigureAwait(false);
+            _logger?.LogError(ex, "ExecuteNonQueriesAsync failed");
 
             if (ThrowException)
                 throw;
         }
         finally
         {
-            if (transaction != null)
-            {
-                await Task.Run(() => transaction.Dispose())
-                    .ConfigureAwait(false);
-            }
-
-            if (command != null)
-            {
-                await Task.Run(() => command.Dispose())
-                    .ConfigureAwait(false);
-            }
-
-            if (_connection != null)
-            {
-                await Task.Run(() => _connection.Close())
-                    .ConfigureAwait(false);
-            }
+            transaction?.Dispose();
+            command?.Dispose();
+            _connection?.Close();
         }
     }
 
@@ -786,11 +756,11 @@ public class BulkSqlLoader
     /// <returns>List of names.</returns>
     public async Task<IEnumerable<string>> GetColumnsNameAsync(string tableName)
     {
-        List<string> results = new();
+        List<string> results = [];
 
         var query = $"SELECT * FROM {tableName}";
 
-        _connection = Connect();
+        _connection = await ConnectAsync().ConfigureAwait(false);
 
         IDbCommand command = null;
 
@@ -799,18 +769,26 @@ public class BulkSqlLoader
             command = _connection.CreateCommand();
             command.CommandText = query;
 
-            using var reader = await Task.Run(() => command.ExecuteReader())
-                .ConfigureAwait(false);
+            var reader = await Task.Run(() => command.ExecuteReader()).ConfigureAwait(false);
 
-            for (int i = 0; i < reader.FieldCount; ++i)
+            try
             {
-                results.Add(reader.GetName(i));
+                var fieldCount = reader.FieldCount;
+                results = new List<string>(fieldCount);
+
+                for (var i = 0; i < fieldCount; ++i)
+                {
+                    results.Add(reader.GetName(i));
+                }
+            }
+            finally
+            {
+                reader.Dispose();
             }
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex.Message);
-            _logger?.LogError(ex.StackTrace);
+            _logger?.LogError(ex, "GetColumnsNameAsync failed for table {TableName}", tableName);
 
             if (ThrowException)
                 throw;
@@ -818,7 +796,6 @@ public class BulkSqlLoader
         finally
         {
             command?.Dispose();
-
             _connection?.Close();
         }
 
@@ -833,10 +810,9 @@ public class BulkSqlLoader
     /// <returns>Results list of T objects.</returns>
     public async Task<IEnumerable<T>> ExecuteQueryAsync<T>(string query) where T : class, new()
     {
-        List<T> results = new();
+        List<T> results = [];
 
-        _connection = await ConnectAsync()
-            .ConfigureAwait(false);
+        _connection = await ConnectAsync().ConfigureAwait(false);
 
         IDbCommand command = null;
 
@@ -846,52 +822,48 @@ public class BulkSqlLoader
             command = _connection.CreateCommand();
             command.CommandText = query;
 
-            using var reader = await Task.Run(() => command.ExecuteReader())
-                .ConfigureAwait(false);
+            var reader = await Task.Run(() => command.ExecuteReader()).ConfigureAwait(false);
 
-            T obj = new();
             await Task.Run(() =>
             {
-                while (reader.Read())
+                try
                 {
-                    for (int i = 0; i < reader.FieldCount; ++i)
+                    while (reader.Read())
                     {
-                        var key = reader.GetName(i);
-
-                        if (typeAnalyzer.PropertiesIndex.ContainsKey(key))
+                        T obj = new();
+                        
+                        var fieldCount = reader.FieldCount;
+                        for (var i = 0; i < fieldCount; ++i)
                         {
-                            typeAnalyzer.PropertiesIndex[key].SetValue(obj, reader[i]);
-                        }
-                    }
+                            var key = reader.GetName(i);
+                            var value = reader[i];
 
-                    results.Add(obj);
+                            if (typeAnalyzer.PropertiesIndex.TryGetValue(key, out var propertyInfo))
+                            {
+                                propertyInfo.SetValue(obj, value is DBNull ? null : value);
+                            }
+                        }
+
+                        results.Add(obj);
+                    }
+                }
+                finally
+                {
+                    reader.Dispose();
                 }
             }).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            await Task.Run(() =>
-            {
-                _logger?.LogError(ex.Message);
-                _logger?.LogError(ex.StackTrace);
-            }).ConfigureAwait(false);
+            _logger?.LogError(ex, "ExecuteQueryAsync<T> failed");
 
             if (ThrowException)
                 throw;
         }
         finally
         {
-            if (command != null)
-            {
-                await Task.Run(() => command.Dispose())
-                    .ConfigureAwait(false);
-            }
-
-            if (_connection != null)
-            {
-                await Task.Run(() => _connection.Close())
-                    .ConfigureAwait(false);
-            }
+            command?.Dispose();
+            _connection?.Close();
         }
 
         return results;

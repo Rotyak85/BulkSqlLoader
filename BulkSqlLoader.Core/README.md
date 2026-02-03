@@ -97,7 +97,7 @@ This library is NOT thread safe, the connection is shared, so avoid code like:
 or:
 ```csharp
         var t = Task.Run(() => _bulkSqlLoader.ExecuteQueries<TEST_TABLE>(nonQueries, parameters);
-        vat t2 = Task.Run(() => _bulkSqlLoader.ExecuteNonQueriesAsync(nonQueries, parameters);
+        vat t2 = Task.Run(() => _bulkSqlLoader.ExecuteNonQueries(nonQueries, parameters);
                 
         Task.WhenAll(t1, t2);
 ```
