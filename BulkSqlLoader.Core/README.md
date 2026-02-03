@@ -28,7 +28,7 @@ Initialization:
             _bulkSqlLoader = new BulkSqlLoader(
                 conn,
                 throwException: true, 
-		paramsBatchLimit: paramsBatchLimit); //for example: sqlserver 2017 express has 2100
+                paramsBatchLimit: paramsBatchLimit); //for example: sqlserver 2017 express has 2100
 ```
 Use:
  ```csharp   
@@ -41,7 +41,7 @@ Use:
             {
                //excpetion handler code
             }
- ```                 
+```                 
 The following example is just to show how the "nonQueries", "parameters" args can be structured
 ```csharp            
             /*example: generate 200000 non queries with 1M random parameters*/
@@ -81,8 +81,23 @@ The following example is just to show how the "nonQueries", "parameters" args ca
 It is possible to query the db in a generic way with the executeQuery methods:
 ```csharp
 	IEnumerable<TEST_TABLE> results = bulkSqlLoader.ExecuteQuery<TEST_TABLE>(query);
-```	
+```
 or more generically:
 ```csharp
 	IEnumerable<object[]> results = bulkSqlLoader.ExecuteQuery(query);
+```
+This library is NOT thread safe, the connection is shared, so avoid code like:
+```csharp
+	while (conditionTrue)
+	{
+	     _bulkSqlLoader.ExecuteNonQueriesAsync(nonQueries, parameters)
+	        .ConfigureAwait(false); 
+	}
+```
+or:
+```csharp
+        var t = Task.Run(() => _bulkSqlLoader.ExecuteQueries<TEST_TABLE>(nonQueries, parameters);
+        vat t2 = Task.Run(() => _bulkSqlLoader.ExecuteNonQueriesAsync(nonQueries, parameters);
+                
+        Task.WhenAll(t1, t2);
 ```

@@ -1,20 +1,19 @@
 ﻿using System.Collections.Generic;
 using System.Reflection;
 
-namespace Loaders.Utilities
+namespace Loaders;
+
+public class TypeAnalyzer<T>
 {
-    internal class TypeAnalyzer<T>
+    public readonly Dictionary<string, PropertyInfo> PropertiesIndex;
+
+    internal TypeAnalyzer()
     {
-        internal readonly Dictionary<string, PropertyInfo> PropertiesIndex;
+        PropertiesIndex = new Dictionary<string, PropertyInfo>();
 
-        internal TypeAnalyzer()
+        foreach (var prop in typeof(T).GetProperties())
         {
-            PropertiesIndex = new Dictionary<string, PropertyInfo>();
-
-            foreach (var prop in typeof(T).GetProperties())
-            {
-                PropertiesIndex.Add(prop.Name, prop);
-            }
+            PropertiesIndex.Add(prop.Name, prop);
         }
     }
 }
